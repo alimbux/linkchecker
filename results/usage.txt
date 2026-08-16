@@ -1,0 +1,7 @@
+Total cost:            $5.82
+Total duration (API):  15m 43s
+Total duration (wall): 32m 5s
+Total code changes:    3054 lines added, 40 lines removed
+Usage by model:
+    claude-haiku-4-5:  652 input, 16 output, 0 cache read, 0 cache write ($0.0007)
+     claude-sonnet-5:  264 input, 101.5k output, 11.1m cache read, 161.3k cache write ($5.82)
