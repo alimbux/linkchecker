@@ -72,18 +72,13 @@ def render_console(
     else:
         shown = [r for r in results if r.status != Status.OK]
 
-    # The Target column never wraps, so the console must be wide enough to
-    # fit the longest link on one line instead of squeezing every column.
-    longest_target = max((len(r.normalized_target or r.original_target) for r in shown), default=0)
-    console_width = max(100, longest_target + 60)
-
     buffer = StringIO()
     console = Console(
         file=buffer,
         force_terminal=not no_color,
         no_color=no_color,
         color_system=None if no_color else "standard",
-        width=console_width,
+        width=100,
         highlight=False,
     )
 
@@ -106,11 +101,11 @@ def render_console(
 
     if shown:
         table = Table(box=HEAVY_HEAD, header_style="bold")
-        table.add_column("File")
+        table.add_column("File", overflow="fold")
         table.add_column("Line", justify="right")
         table.add_column("Status")
         table.add_column("Details", overflow="fold")
-        table.add_column("Target", overflow="ignore", no_wrap=True)
+        table.add_column("Target", overflow="fold")
         for r in shown:
             style = STATUS_STYLES.get(r.status, "")
             table.add_row(

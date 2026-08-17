@@ -97,7 +97,7 @@ def test_console_quiet_suppresses_summary_lines():
     assert "docs/start.md" in output
 
 
-def test_console_target_column_is_last_and_not_wrapped():
+def test_console_target_column_is_last_and_wraps_long_links():
     long_url = "https://example.com/" + "a" * 150
     results = [
         _result(
@@ -112,4 +112,16 @@ def test_console_target_column_is_last_and_not_wrapped():
     output = render_console(summary, results, no_color=True)
     header_line = next(line for line in output.splitlines() if "File" in line and "Status" in line)
     assert header_line.index("Target") > header_line.index("Details")
-    assert long_url in output
+    # A very long link must not stretch the console; it wraps onto multiple
+    # table rows instead of appearing intact on a single line.
+    assert long_url not in output
+    assert "aaaa" in output
+
+
+def test_console_file_column_wraps_long_paths_instead_of_truncating():
+    long_path = "docs/" + "nested/" * 20 + "page.md"
+    results = [_result(Status.BROKEN, http_status=404, message="Not Found", source_file=long_path)]
+    summary = build_summary(files_scanned=1, links_found=1, results=results, duration_ms=10)
+    output = render_console(summary, results, no_color=True)
+    assert "..." not in output
+    assert "page.md" in output
