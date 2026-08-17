@@ -21,20 +21,12 @@ def resolve_local_path(source_path: Path, normalized_target: str) -> Path:
     return source_path.parent / normalized_target
 
 
-def check_local(link: Link, source_path: Path, *, enabled: bool = True) -> LinkResult:
-    if not enabled:
-        return LinkResult.from_link(link, Status.SKIPPED, message="local link checking disabled")
-
-    if not link.normalized_target:
-        return LinkResult.from_link(link, Status.BROKEN, message="empty local target")
-
-    target_path = resolve_local_path(source_path, link.normalized_target)
-
+def _missing_result(link: Link, target_path: Path) -> LinkResult | None:
+    """A BROKEN result if ``target_path`` doesn't exist, else None."""
     try:
         is_symlink = target_path.is_symlink()
     except OSError:
         is_symlink = False
-
     try:
         exists = target_path.exists()
     except OSError:
@@ -44,6 +36,21 @@ def check_local(link: Link, source_path: Path, *, enabled: bool = True) -> LinkR
         return LinkResult.from_link(link, Status.BROKEN, message="broken symbolic link")
     if not exists:
         return LinkResult.from_link(link, Status.BROKEN, message="no such file or directory")
+    return None
+
+
+def check_local(link: Link, source_path: Path, *, enabled: bool = True) -> LinkResult:
+    if not enabled:
+        return LinkResult.from_link(link, Status.SKIPPED, message="local link checking disabled")
+
+    if not link.normalized_target:
+        return LinkResult.from_link(link, Status.BROKEN, message="empty local target")
+
+    target_path = resolve_local_path(source_path, link.normalized_target)
+
+    missing = _missing_result(link, target_path)
+    if missing is not None:
+        return missing
 
     try:
         is_dir = target_path.is_dir()
@@ -72,18 +79,5 @@ def check_file_uri(link: Link, *, enabled: bool = True) -> LinkResult:
         return LinkResult.from_link(link, Status.INVALID, message="malformed file:// URI")
 
     target_path = Path(path)
-
-    try:
-        is_symlink = target_path.is_symlink()
-    except OSError:
-        is_symlink = False
-    try:
-        exists = target_path.exists()
-    except OSError:
-        exists = False
-
-    if is_symlink and not exists:
-        return LinkResult.from_link(link, Status.BROKEN, message="broken symbolic link")
-    if not exists:
-        return LinkResult.from_link(link, Status.BROKEN, message="no such file or directory")
-    return LinkResult.from_link(link, Status.OK)
+    missing = _missing_result(link, target_path)
+    return missing if missing is not None else LinkResult.from_link(link, Status.OK)

@@ -137,8 +137,6 @@ def normalize_target(target: str, link_type: LinkType) -> str:
     if link_type in (LinkType.LOCAL_FILE, LinkType.LOCAL_DIRECTORY, LinkType.LOCAL_ANCHOR):
         path_part, _query, _fragment = split_target(target)
         return normalize_local_target(path_part)
-    if link_type in (LinkType.HTTP, LinkType.HTTPS):
-        return target.strip()
     return target.strip()
 
 
@@ -161,8 +159,8 @@ class _LineIndex:
         return bisect.bisect_right(self._starts, offset)
 
 
-def _find_matching_bracket(s: str, start: int) -> int:
-    """Find the index of the ``]`` matching the ``[`` at ``s[start]``."""
+def _find_matching(s: str, start: int, open_ch: str, close_ch: str) -> int:
+    """Find the index closing the bracket/paren pair opened at ``s[start]``."""
     depth = 0
     i = start
     while i < len(s):
@@ -170,39 +168,22 @@ def _find_matching_bracket(s: str, start: int) -> int:
         if ch == "\\":
             i += 2
             continue
-        if ch == "[":
+        if ch == open_ch:
             depth += 1
-        elif ch == "]":
+        elif ch == close_ch:
             depth -= 1
             if depth == 0:
                 return i
         i += 1
     return -1
+
+
+def _find_matching_bracket(s: str, start: int) -> int:
+    return _find_matching(s, start, "[", "]")
 
 
 def _find_matching_paren(s: str, start: int) -> int:
-    depth = 0
-    i = start
-    while i < len(s):
-        ch = s[i]
-        if ch == "\\":
-            i += 2
-            continue
-        if ch == "(":
-            depth += 1
-        elif ch == ")":
-            depth -= 1
-            if depth == 0:
-                return i
-        i += 1
-    return -1
-
-
-def _extract_title(rest: str) -> str | None:
-    rest = rest.strip()
-    if len(rest) >= 2 and rest[0] in "\"'" and rest[-1] == rest[0]:
-        return rest[1:-1]
-    return None
+    return _find_matching(s, start, "(", ")")
 
 
 TRAILING_TITLE_RE = re.compile(r"""\s+("[^"]*"|'[^']*')\s*$""")

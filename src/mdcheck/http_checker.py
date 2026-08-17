@@ -96,13 +96,6 @@ def _classify_response(resp: httpx.Response) -> _Outcome:
             retryable=True,
             retry_after=_parse_retry_after(resp),
         )
-    if 400 <= code < 500:
-        return _Outcome(
-            Status.BROKEN,
-            http_status=code,
-            final_url=final_url,
-            message=resp.reason_phrase or f"HTTP {code}",
-        )
     if code in (502, 503, 504):
         return _Outcome(
             Status.BROKEN,
@@ -112,7 +105,7 @@ def _classify_response(resp: httpx.Response) -> _Outcome:
             retryable=True,
             retry_after=_parse_retry_after(resp),
         )
-    if 500 <= code < 600:
+    if 400 <= code < 600:
         return _Outcome(
             Status.BROKEN,
             http_status=code,

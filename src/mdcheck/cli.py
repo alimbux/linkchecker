@@ -193,46 +193,34 @@ def _classify_and_check(
     return None
 
 
+def _file_error(source_file: str, message: str) -> LinkResult:
+    return LinkResult(
+        source_file=source_file,
+        line=0,
+        link_text="",
+        original_target="",
+        normalized_target="",
+        link_type=LinkType.INVALID,
+        status=Status.ERROR,
+        message=message,
+    )
+
+
 async def run(config: Config) -> int:
     start = time.monotonic()
 
     files, scan_errors = scanner.discover_files(config.path, config.include, config.all_excludes)
 
-    results: list[LinkResult] = []
-    for scan_error in scan_errors:
-        results.append(
-            LinkResult(
-                source_file=scan_error.path,
-                line=0,
-                link_text="",
-                original_target="",
-                normalized_target="",
-                link_type=LinkType.INVALID,
-                status=Status.ERROR,
-                message=scan_error.message,
-            )
-        )
+    results: list[LinkResult] = [_file_error(e.path, e.message) for e in scan_errors]
 
     all_links: list[tuple[Link, Path]] = []
     for file_path in files:
+        label = _display_path(file_path, config.path)
         try:
             text = file_path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as exc:
-            label = _display_path(file_path, config.path)
-            results.append(
-                LinkResult(
-                    source_file=label,
-                    line=0,
-                    link_text="",
-                    original_target="",
-                    normalized_target="",
-                    link_type=LinkType.INVALID,
-                    status=Status.ERROR,
-                    message=f"could not read file: {exc}",
-                )
-            )
+            results.append(_file_error(label, f"could not read file: {exc}"))
             continue
-        label = _display_path(file_path, config.path)
         for link in link_parser.extract_links(label, text):
             all_links.append((link, file_path))
 
