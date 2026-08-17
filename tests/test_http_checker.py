@@ -201,6 +201,24 @@ async def test_head_405_falls_back_to_get():
 
 
 @pytest.mark.asyncio
+async def test_head_404_falls_back_to_get():
+    # Regression: some servers (e.g. Figma) answer HEAD with 404 while GET
+    # succeeds, not just the 405/501 cases the spec calls out explicitly.
+    calls = []
+
+    def handler(request):
+        calls.append(request.method)
+        if request.method == "HEAD":
+            return httpx.Response(404)
+        return httpx.Response(200)
+
+    checker = _checker(handler, retries=0)
+    results = await checker.check_links([_link("https://x.test/head-lies")])
+    assert results[0].status == Status.OK
+    assert calls == ["HEAD", "GET"]
+
+
+@pytest.mark.asyncio
 async def test_duplicate_url_requested_once():
     calls = {"n": 0}
 

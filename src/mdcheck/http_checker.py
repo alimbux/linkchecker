@@ -196,7 +196,8 @@ class HttpChecker:
             start = time.monotonic()
             try:
                 resp = await client.head(url)
-                if resp.status_code in (405, 501):
+                if not (200 <= resp.status_code < 400):
+                    # Some servers misreport HEAD with codes other than 405/501.
                     resp = await self._get_streamed(client, url)
             except httpx.HTTPError as exc:
                 outcome = _classify_exception(exc)

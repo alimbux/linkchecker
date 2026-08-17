@@ -158,7 +158,9 @@ diagnostics go to stderr. Shape:
 ## HTTP checking behavior
 
 - Sends `HEAD` first; falls back to a streamed `GET` (reading at most 64 KiB)
-  when the server responds `405`/`501`.
+  whenever `HEAD` doesn't return a successful (`2xx`/`3xx`) status — not just
+  `405`/`501`. Some servers (e.g. Figma) answer `HEAD` with an unrelated error
+  status while `GET` succeeds.
 - Follows up to 5 redirects; a redirect loop or exceeded limit is `ERROR`.
 - Retries only transient failures (timeouts, connection errors, DNS hiccups,
   `429`, `502`/`503`/`504`) with a short exponential backoff, honoring
