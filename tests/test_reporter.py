@@ -95,3 +95,21 @@ def test_console_quiet_suppresses_summary_lines():
     output = render_console(summary, results, no_color=True, quiet=True)
     assert "Scanned:" not in output
     assert "docs/start.md" in output
+
+
+def test_console_target_column_is_last_and_not_wrapped():
+    long_url = "https://example.com/" + "a" * 150
+    results = [
+        _result(
+            Status.BROKEN,
+            http_status=404,
+            message="Not Found",
+            original_target=long_url,
+            normalized_target=long_url,
+        )
+    ]
+    summary = build_summary(files_scanned=1, links_found=1, results=results, duration_ms=10)
+    output = render_console(summary, results, no_color=True)
+    header_line = next(line for line in output.splitlines() if "File" in line and "Status" in line)
+    assert header_line.index("Target") > header_line.index("Details")
+    assert long_url in output
