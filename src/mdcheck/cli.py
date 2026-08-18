@@ -9,6 +9,8 @@ import time
 from pathlib import Path
 
 import typer
+from rich.console import Console
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 from mdcheck import __version__, anchor_checker, local_checker, reporter, scanner
 from mdcheck import parser as link_parser
@@ -193,6 +195,21 @@ def _classify_and_check(
     return None
 
 
+def _make_progress(config: Config) -> Progress:
+    """A progress bar over stderr; disabled when quiet or output isn't a terminal."""
+    progress_console = Console(file=sys.stderr, no_color=config.no_color)
+    disable = config.quiet or not progress_console.is_terminal
+    return Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        TimeElapsedColumn(),
+        console=progress_console,
+        disable=disable,
+    )
+
+
 def _file_error(source_file: str, message: str) -> LinkResult:
     return LinkResult(
         source_file=source_file,
@@ -227,31 +244,40 @@ async def run(config: Config) -> int:
     anchors_cache: dict[Path, set[str]] = {}
     http_links: list[Link] = []
 
-    for link, source_path in all_links:
-        if link.link_type in (LinkType.HTTP, LinkType.HTTPS):
-            if not config.check_external:
-                results.append(
-                    LinkResult.from_link(
-                        link, Status.SKIPPED, message="external link checking disabled"
+    with _make_progress(config) as progress:
+        task = progress.add_task("Checking links...", total=len(all_links) or 1)
+
+        for link, source_path in all_links:
+            if link.link_type in (LinkType.HTTP, LinkType.HTTPS):
+                if not config.check_external:
+                    results.append(
+                        LinkResult.from_link(
+                            link, Status.SKIPPED, message="external link checking disabled"
+                        )
                     )
+                    progress.advance(task)
+                else:
+                    http_links.append(link)
+                continue
+
+            result = _classify_and_check(link, source_path, config, anchors_cache)
+            if result is not None:
+                results.append(result)
+            progress.advance(task)
+
+        if http_links:
+            checker = HttpChecker(
+                timeout=config.timeout,
+                workers=config.workers,
+                retries=config.retries,
+                user_agent=config.user_agent,
+                ignore_url_patterns=config.ignore_url,
+            )
+            results.extend(
+                await checker.check_links(
+                    http_links, on_progress=lambda n: progress.advance(task, n)
                 )
-            else:
-                http_links.append(link)
-            continue
-
-        result = _classify_and_check(link, source_path, config, anchors_cache)
-        if result is not None:
-            results.append(result)
-
-    if http_links:
-        checker = HttpChecker(
-            timeout=config.timeout,
-            workers=config.workers,
-            retries=config.retries,
-            user_agent=config.user_agent,
-            ignore_url_patterns=config.ignore_url,
-        )
-        results.extend(await checker.check_links(http_links))
+            )
 
     results.sort(key=lambda r: (r.source_file, r.line, r.original_target))
 

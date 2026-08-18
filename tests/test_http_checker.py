@@ -275,6 +275,32 @@ async def test_concurrency_limit_respected():
 
 
 @pytest.mark.asyncio
+async def test_on_progress_called_once_per_link_including_duplicates_and_ignored():
+    def handler(request):
+        return httpx.Response(200)
+
+    transport = httpx.MockTransport(handler)
+    checker = HttpChecker(
+        timeout=1,
+        workers=5,
+        retries=0,
+        user_agent="mdcheck-test",
+        transport=transport,
+        sleep_fn=_noop_sleep,
+        ignore_url_patterns=["https://x.test/ignored"],
+    )
+    links = [
+        _link("https://x.test/dup", line=1),
+        _link("https://x.test/dup", line=2),
+        _link("https://x.test/unique", line=3),
+        _link("https://x.test/ignored", line=4),
+    ]
+    progressed = []
+    await checker.check_links(links, on_progress=progressed.append)
+    assert sum(progressed) == len(links)
+
+
+@pytest.mark.asyncio
 async def test_ignore_url_pattern_is_skipped():
     calls = {"n": 0}
 

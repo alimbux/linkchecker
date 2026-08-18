@@ -211,7 +211,18 @@ class HttpChecker:
                 continue
             return outcome
 
-    async def check_links(self, links: list[Link]) -> list[LinkResult]:
+    async def check_links(
+        self,
+        links: list[Link],
+        *,
+        on_progress: Callable[[int], None] | None = None,
+    ) -> list[LinkResult]:
+        """Check every link, reporting progress as each unique URL resolves.
+
+        ``on_progress``, when given, is called once per unique URL as soon as
+        its outcome is known, with the number of links (occurrences) sharing
+        that URL — so the sum of all calls equals ``len(links)``.
+        """
         if not links:
             return []
 
@@ -224,6 +235,8 @@ class HttpChecker:
         for url in unique_targets:
             if url_matches_ignore(url, self.ignore_url_patterns):
                 outcomes[url] = _Outcome(Status.SKIPPED, message="ignored by --ignore-url pattern")
+                if on_progress is not None:
+                    on_progress(len(unique_targets[url]))
             else:
                 to_fetch.append(url)
 
@@ -246,6 +259,8 @@ class HttpChecker:
                 async def worker(url: str) -> None:
                     async with semaphore:
                         outcomes[url] = await self._check_one(client, url)
+                        if on_progress is not None:
+                            on_progress(len(unique_targets[url]))
 
                 await asyncio.gather(*(worker(u) for u in to_fetch))
 

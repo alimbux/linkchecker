@@ -117,6 +117,14 @@ broken.
 
 `WARNING` and `SKIPPED` results alone never produce exit code `1`.
 
+## Progress indicator
+
+While links are being checked, mdcheck shows a live progress bar (spinner,
+bar, percentage, elapsed time) on stderr — it never touches stdout, so it
+never corrupts `--format json` output or a report written with `--output`.
+It's automatically disabled when `--quiet` is used or when stderr isn't a
+terminal (e.g. redirected to a file or a CI log).
+
 ## JSON report
 
 With `--format json`, stdout contains **only** valid JSON; progress and

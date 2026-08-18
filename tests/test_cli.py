@@ -6,7 +6,8 @@ import httpx
 import pytest
 from typer.testing import CliRunner
 
-from mdcheck.cli import app
+from mdcheck.cli import _make_progress, app
+from mdcheck.config import Config
 from mdcheck.http_checker import HttpChecker
 
 runner = CliRunner()
@@ -218,3 +219,34 @@ def test_unexpected_exception_exits_2_without_traceback(tmp_path, monkeypatch):
     assert result.exit_code == 2
     assert "Traceback" not in result.stderr
     assert "unexpected failure: boom" in result.stderr
+
+
+def test_progress_bar_disabled_when_not_a_terminal(tmp_path):
+    config = Config(path=tmp_path)
+    progress = _make_progress(config)
+    assert progress.disable is True
+
+
+def test_progress_bar_disabled_in_quiet_mode(tmp_path, monkeypatch):
+    monkeypatch.setattr("rich.console.Console.is_terminal", property(lambda self: True))
+    config = Config(path=tmp_path, quiet=True)
+    progress = _make_progress(config)
+    assert progress.disable is True
+
+
+def test_progress_bar_enabled_on_a_real_terminal(tmp_path, monkeypatch):
+    monkeypatch.setattr("rich.console.Console.is_terminal", property(lambda self: True))
+    config = Config(path=tmp_path, quiet=False)
+    progress = _make_progress(config)
+    assert progress.disable is False
+
+
+def test_json_stdout_stays_clean_with_progress_forced_on(tmp_path, monkeypatch):
+    monkeypatch.setattr("rich.console.Console.is_terminal", property(lambda self: True))
+    _write(tmp_path / "README.md", "[Missing](missing.md)\n")
+
+    result = runner.invoke(app, [str(tmp_path), "--no-external", "--format", "json"])
+
+    assert result.exit_code == 1
+    data = json.loads(result.stdout)
+    assert data["summary"]["broken"] == 1

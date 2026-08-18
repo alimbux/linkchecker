@@ -41,6 +41,7 @@ The first version includes:
 - checking HTTP/HTTPS links;
 - checking Markdown anchors;
 - a colored console report;
+- a live progress indicator while checks run;
 - a JSON report;
 - concurrent HTTP checks;
 - CI-compatible exit codes;
@@ -330,7 +331,7 @@ For every unique normalized URL:
 
 1. Send a `HEAD` request.
 2. Follow redirects.
-3. If the server returns `405 Method Not Allowed`, `501 Not Implemented`, or otherwise handles `HEAD` incorrectly, retry with `GET`.
+3. If `HEAD` does not return a successful status (any code outside `2xx`/`3xx` — not only `405 Method Not Allowed` or `501 Not Implemented`), retry with `GET`. Some servers (observed: Figma) answer `HEAD` with an unrelated error status while `GET` succeeds, so the fallback must not be restricted to the two codes the general case suggests.
 4. Stream fallback `GET` responses instead of downloading the full body.
 5. Read at most the first 64 KiB.
 6. Use a shared connection pool.
@@ -450,6 +451,31 @@ Optional fields must be `null` in JSON.
 
 ## 13. Console Report
 
+### 13.1 Progress Indicator
+
+While files are scanned and links are checked, show a live progress bar
+(spinner, description, bar, percentage, elapsed time) tracking how many of
+the discovered links have been resolved so far:
+
+```text
+⠋ Checking links... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  42% 0:00:02
+```
+
+The progress indicator:
+
+- is written to stderr, never to stdout, so it never corrupts `--format json`
+  output or a report written with `--output`;
+- advances once per extracted link — for local, anchor, and `file://` checks
+  as each is resolved synchronously, and for HTTP/HTTPS checks as each
+  distinct URL's request completes (a URL shared by several links advances
+  the bar once for every occurrence at that moment, since they all resolve
+  together);
+- is automatically disabled when `--quiet` is used or stderr is not a TTY
+  (e.g. redirected to a file or a CI log), so it never leaves partial escape
+  sequences in captured output.
+
+### 13.2 Summary and Problems Table
+
 Print a summary by default:
 
 ```text
@@ -467,14 +493,19 @@ Duration: 2.84s
 Then print a table of problems:
 
 ```text
-┏━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┓
-┃ File              ┃ Line ┃ Status   ┃ Target             ┃ Details          ┃
-┡━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━┩
-│ docs/start.md     │ 18   │ 404      │ https://...        │ Not Found        │
-│ README.md         │ 42   │ MISSING  │ docs/old-guide.md  │ File not found   │
-│ docs/api.md       │ 71   │ TIMEOUT  │ https://...        │ timeout after 5s │
-└───────────────────┴──────┴──────────┴────────────────────┴──────────────────┘
+┏━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓
+┃ File              ┃ Line ┃ Status   ┃ Details          ┃ Target             ┃
+┡━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩
+│ docs/start.md     │ 18   │ 404      │ Not Found        │ https://...        │
+│ README.md         │ 42   │ MISSING  │ File not found   │ docs/old-guide.md  │
+│ docs/api.md       │ 71   │ TIMEOUT  │ timeout after 5s │ https://...        │
+└───────────────────┴──────┴──────────┴──────────────────┴────────────────────┘
 ```
+
+`Target` is the last column, since it is the field most likely to be long
+(full URLs, deep relative paths). Neither `File` nor `Target` is truncated
+with an ellipsis: both wrap onto additional lines within the fixed table
+width instead of losing information.
 
 Colors:
 
@@ -666,9 +697,10 @@ All network tests must use a mocked HTTP transport or a local test server. Tests
 - timeout;
 - DNS failure;
 - TLS failure;
-- `HEAD 405` with successful `GET` fallback;
+- `HEAD` returning any non-`2xx`/`3xx` status (not only `405`/`501`) falls back to `GET`;
 - duplicate URL is requested once;
-- concurrency limit is respected.
+- concurrency limit is respected;
+- the progress callback fires exactly once per link, including duplicate and `--ignore-url`-skipped URLs, and the total matches the number of links checked.
 
 ### 18.5 CLI
 
@@ -681,7 +713,9 @@ All network tests must use a mocked HTTP transport or a local test server. Tests
 - `--output`;
 - correct exit codes;
 - no ANSI sequences with `--no-color`;
-- JSON remains valid when individual links fail.
+- JSON remains valid when individual links fail;
+- JSON remains valid on stdout even when the progress indicator is active;
+- the progress indicator is disabled when `--quiet` is used or stderr is not a TTY.
 
 ## 19. Acceptance Criteria
 
