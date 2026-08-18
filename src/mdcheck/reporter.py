@@ -65,6 +65,7 @@ def render_console(
     no_color: bool = False,
     quiet: bool = False,
     verbose: bool = False,
+    width: int = 100,
     file=None,
 ) -> str:
     if verbose:
@@ -78,7 +79,7 @@ def render_console(
         force_terminal=not no_color,
         no_color=no_color,
         color_system=None if no_color else "standard",
-        width=100,
+        width=width,
         highlight=False,
     )
 
@@ -100,12 +101,18 @@ def render_console(
         console.print()
 
     if shown:
-        table = Table(box=HEAVY_HEAD, header_style="bold")
-        table.add_column("File", overflow="fold")
+        # expand=True fits the table to the console width; giving File,
+        # Details, and Target a ratio makes them share that width together
+        # (rather than File/Details claiming their full natural width
+        # unconditionally, which would starve Target down to nothing) with
+        # Target getting the largest share, since it usually holds the
+        # longest content (full URLs, deep relative paths).
+        table = Table(box=HEAVY_HEAD, header_style="bold", expand=True)
+        table.add_column("File", overflow="fold", ratio=1)
         table.add_column("Line", justify="right")
         table.add_column("Status")
-        table.add_column("Details", overflow="fold")
-        table.add_column("Target", overflow="fold")
+        table.add_column("Details", overflow="fold", ratio=1)
+        table.add_column("Target", overflow="fold", ratio=3)
         for r in shown:
             style = STATUS_STYLES.get(r.status, "")
             table.add_row(

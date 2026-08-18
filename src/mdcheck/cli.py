@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -289,7 +290,9 @@ async def run(config: Config) -> int:
         duration_ms=duration_ms,
     )
 
-    use_color = (not config.no_color) and (config.output is None) and sys.stdout.isatty()
+    is_interactive = config.output is None and sys.stdout.isatty()
+    use_color = (not config.no_color) and is_interactive
+    report_width = shutil.get_terminal_size(fallback=(100, 24)).columns if is_interactive else 100
 
     if config.format == "json":
         output_text = reporter.render_json(summary, results)
@@ -300,6 +303,7 @@ async def run(config: Config) -> int:
             no_color=not use_color,
             quiet=config.quiet,
             verbose=config.verbose,
+            width=report_width,
         )
 
     if config.output is not None:

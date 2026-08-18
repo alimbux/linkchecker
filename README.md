@@ -125,6 +125,14 @@ never corrupts `--format json` output or a report written with `--output`.
 It's automatically disabled when `--quiet` is used or when stderr isn't a
 terminal (e.g. redirected to a file or a CI log).
 
+## Problems table sizing
+
+The console problems table fits itself to the real terminal width instead
+of using a fixed size. `File`, `Details`, and `Target` share the available
+width proportionally — `Target` always gets the largest share, since links
+and paths are usually the longest field — and none of them are truncated
+with an ellipsis; long values wrap onto extra lines instead.
+
 ## JSON report
 
 With `--format json`, stdout contains **only** valid JSON; progress and

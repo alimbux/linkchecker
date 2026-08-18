@@ -1,16 +1,25 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import os
+from io import StringIO
 
 import httpx
 import pytest
 from typer.testing import CliRunner
 
 from mdcheck.cli import _make_progress, app
+from mdcheck.cli import run as cli_run
 from mdcheck.config import Config
 from mdcheck.http_checker import HttpChecker
 
 runner = CliRunner()
+
+
+class _FakeTerminalStdout(StringIO):
+    def isatty(self) -> bool:
+        return True
 
 
 @pytest.fixture
@@ -250,3 +259,25 @@ def test_json_stdout_stays_clean_with_progress_forced_on(tmp_path, monkeypatch):
     assert result.exit_code == 1
     data = json.loads(result.stdout)
     assert data["summary"]["broken"] == 1
+
+
+@pytest.mark.parametrize("width", [60, 140])
+def test_console_table_uses_real_terminal_width(tmp_path, monkeypatch, width):
+    long_target = "docs/" + "nested/" * 10 + "missing.md"
+    _write(tmp_path / "README.md", f"[Bad]({long_target})\n")
+
+    fake_stdout = _FakeTerminalStdout()
+    monkeypatch.setattr("sys.stdout", fake_stdout)
+    monkeypatch.setattr("shutil.get_terminal_size", lambda fallback: os.terminal_size((width, 24)))
+
+    config = Config(path=tmp_path, check_external=False, quiet=False, no_color=True)
+    exit_code = asyncio.run(cli_run(config))
+
+    assert exit_code == 1
+    output = fake_stdout.getvalue()
+    table_lines = [
+        line for line in output.splitlines() if line.strip().startswith(("┏", "┃", "┡", "│", "└"))
+    ]
+    assert table_lines
+    for line in table_lines:
+        assert len(line) <= width

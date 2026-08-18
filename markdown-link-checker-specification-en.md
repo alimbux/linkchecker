@@ -504,8 +504,17 @@ Then print a table of problems:
 
 `Target` is the last column, since it is the field most likely to be long
 (full URLs, deep relative paths). Neither `File` nor `Target` is truncated
-with an ellipsis: both wrap onto additional lines within the fixed table
-width instead of losing information.
+with an ellipsis: both wrap onto additional lines instead of losing
+information.
+
+The table fits itself to the real terminal width (detected via the terminal
+size when stdout is a TTY and `--output` is not used; a fixed fallback width
+is used otherwise, e.g. when writing to a file or a non-interactive
+pipe/CI log). `File`, `Details`, and `Target` share that width
+proportionally rather than any one of them claiming its full, unbounded
+content width — `Target` always receives the largest share, so it is the
+first column to grow when there is extra room and the last to be squeezed
+when the terminal is narrow.
 
 Colors:
 
@@ -715,7 +724,10 @@ All network tests must use a mocked HTTP transport or a local test server. Tests
 - no ANSI sequences with `--no-color`;
 - JSON remains valid when individual links fail;
 - JSON remains valid on stdout even when the progress indicator is active;
-- the progress indicator is disabled when `--quiet` is used or stderr is not a TTY.
+- the progress indicator is disabled when `--quiet` is used or stderr is not a TTY;
+- the problems table fits within the detected terminal width at several
+  widths, and `Target` receives more width than `File` when both compete
+  for space.
 
 ## 19. Acceptance Criteria
 

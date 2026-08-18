@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from mdcheck.models import Link, LinkResult, LinkType, Status
 from mdcheck.reporter import build_summary, render_console, render_json
 
@@ -125,3 +127,56 @@ def test_console_file_column_wraps_long_paths_instead_of_truncating():
     output = render_console(summary, results, no_color=True)
     assert "..." not in output
     assert "page.md" in output
+
+
+def test_console_file_and_target_do_not_starve_each_other():
+    # A pathologically long File value (e.g. an absolute path from a
+    # single-file scan) must not force the Target column down to an
+    # unreadable, single-character width.
+    long_path = "/private/var/" + "folders/" * 15 + "README.md"
+    results = [_result(Status.BROKEN, http_status=404, message="Not Found", source_file=long_path)]
+    summary = build_summary(files_scanned=1, links_found=1, results=results, duration_ms=10)
+    output = render_console(summary, results, no_color=True, width=100)
+    assert "example.com/old" in output
+
+
+@pytest.mark.parametrize("width", [60, 100, 160])
+def test_console_table_fits_within_requested_width(width):
+    long_url = "https://example.com/" + "path/" * 10 + "page"
+    results = [
+        _result(
+            Status.BROKEN,
+            http_status=404,
+            message="Not Found",
+            original_target=long_url,
+            normalized_target=long_url,
+        )
+    ]
+    summary = build_summary(files_scanned=1, links_found=1, results=results, duration_ms=10)
+    output = render_console(summary, results, no_color=True, width=width)
+    table_lines = [
+        line for line in output.splitlines() if line.strip().startswith(("┏", "┃", "┡", "│", "└"))
+    ]
+    assert table_lines
+    for line in table_lines:
+        assert len(line) <= width
+
+
+def test_console_target_gets_the_largest_share_of_width():
+    long_url = "https://example.com/" + "path/" * 10 + "page"
+    results = [
+        _result(
+            Status.BROKEN,
+            http_status=404,
+            message="Not Found",
+            source_file="a.md",
+            original_target=long_url,
+            normalized_target=long_url,
+        )
+    ]
+    summary = build_summary(files_scanned=1, links_found=1, results=results, duration_ms=10)
+    output = render_console(summary, results, no_color=True, width=120)
+    header_line = next(line for line in output.splitlines() if "File" in line and "Status" in line)
+    file_width = header_line.index("Line") - header_line.index("File")
+    target_width = len(header_line) - header_line.index("Target")
+    assert target_width > file_width
